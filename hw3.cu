@@ -106,52 +106,52 @@ void sobel(unsigned char* s, unsigned char* t, unsigned height, unsigned width, 
 
     double val[MASK_N * 3] = {0.0};
     int adjustX, adjustY, xBound, yBound;
-    for (y = index; y < height; y += stride) {
-        for (x = 0; x < width; ++x) {
-            for (i = 0; i < MASK_N; ++i) {
-                
-                adjustX = (MASK_X % 2) ? 1 : 0;
-                adjustY = (MASK_Y % 2) ? 1 : 0;
-                xBound = MASK_X / 2;
-                yBound = MASK_Y / 2;
 
-                val[i * 3 + 2] = 0.0;
-                val[i * 3 + 1] = 0.0;
-                val[i * 3] = 0.0;
+    for (int iter = index; iter < height * width; iter += stride) {
+        y = iter / width;
+        x = iter % width;
+        for (i = 0; i < MASK_N; ++i) {
+            
+            adjustX = (MASK_X % 2) ? 1 : 0;
+            adjustY = (MASK_Y % 2) ? 1 : 0;
+            xBound = MASK_X / 2;
+            yBound = MASK_Y / 2;
 
-                for (v = -yBound; v < yBound + adjustY; ++v) {
-                    for (u = -xBound; u < xBound + adjustX; ++u) {
-                        if ((x + u) >= 0 && (x + u) < width && y + v >= 0 && y + v < height) {
-                            R = s[channels * (width * (y + v) + (x + u)) + 2];
-                            G = s[channels * (width * (y + v) + (x + u)) + 1];
-                            B = s[channels * (width * (y + v) + (x + u)) + 0];
-                            val[i * 3 + 2] += R * mask[i][u + xBound][v + yBound];
-                            val[i * 3 + 1] += G * mask[i][u + xBound][v + yBound];
-                            val[i * 3 + 0] += B * mask[i][u + xBound][v + yBound];
-                        }
+            val[i * 3 + 2] = 0.0;
+            val[i * 3 + 1] = 0.0;
+            val[i * 3] = 0.0;
+
+            for (v = -yBound; v < yBound + adjustY; ++v) {
+                for (u = -xBound; u < xBound + adjustX; ++u) {
+                    if ((x + u) >= 0 && (x + u) < width && y + v >= 0 && y + v < height) {
+                        R = s[channels * (width * (y + v) + (x + u)) + 2];
+                        G = s[channels * (width * (y + v) + (x + u)) + 1];
+                        B = s[channels * (width * (y + v) + (x + u)) + 0];
+                        val[i * 3 + 2] += R * mask[i][u + xBound][v + yBound];
+                        val[i * 3 + 1] += G * mask[i][u + xBound][v + yBound];
+                        val[i * 3 + 0] += B * mask[i][u + xBound][v + yBound];
                     }
                 }
             }
-            double totalR = 0.0;
-            double totalG = 0.0;
-            double totalB = 0.0;
-            for (i = 0; i < MASK_N; ++i) {
-                totalR += val[i * 3 + 2] * val[i * 3 + 2];
-                totalG += val[i * 3 + 1] * val[i * 3 + 1];
-                totalB += val[i * 3 + 0] * val[i * 3 + 0];
-            }
-
-            totalR = sqrt(totalR) / SCALE;
-            totalG = sqrt(totalG) / SCALE;
-            totalB = sqrt(totalB) / SCALE;
-            const unsigned char cR = (totalR > 255.0) ? 255 : totalR;
-            const unsigned char cG = (totalG > 255.0) ? 255 : totalG;
-            const unsigned char cB = (totalB > 255.0) ? 255 : totalB;
-            t[channels * (width * y + x) + 2] = cR;
-            t[channels * (width * y + x) + 1] = cG;
-            t[channels * (width * y + x) + 0] = cB;
         }
-        // printf("%d\n", y);
+        double totalR = 0.0;
+        double totalG = 0.0;
+        double totalB = 0.0;
+        for (i = 0; i < MASK_N; ++i) {
+            totalR += val[i * 3 + 2] * val[i * 3 + 2];
+            totalG += val[i * 3 + 1] * val[i * 3 + 1];
+            totalB += val[i * 3 + 0] * val[i * 3 + 0];
+        }
+
+        totalR = sqrt(totalR) / SCALE;
+        totalG = sqrt(totalG) / SCALE;
+        totalB = sqrt(totalB) / SCALE;
+        const unsigned char cR = (totalR > 255.0) ? 255 : totalR;
+        const unsigned char cG = (totalG > 255.0) ? 255 : totalG;
+        const unsigned char cB = (totalB > 255.0) ? 255 : totalB;
+        t[channels * (width * y + x) + 2] = cR;
+        t[channels * (width * y + x) + 1] = cG;
+        t[channels * (width * y + x) + 0] = cB;
     }
 }
 
@@ -162,14 +162,14 @@ int main(int argc, char** argv) {
     unsigned char* src_img = NULL;
     unsigned char* src_img_GPU = NULL;
     size_t threads_per_block = 256;
-    size_t num_of_blocks = 32 * 20;
+    size_t num_of_blocks = 20;
     unsigned char* dst_img;
     
     
 
     read_png(argv[1], &src_img, &height, &width, &channels);
 
-    std::cout << height << " " << width << std::endl;
+    // std::cout << height << " " << width << std::endl;
     assert(channels == 3);
 
     cudaMallocManaged(&dst_img, height * width * channels * sizeof(unsigned char));
