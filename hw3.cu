@@ -5,26 +5,14 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <ctime> // timer
 
 #define MASK_N 2
 #define MASK_X 5
 #define MASK_Y 5
 #define SCALE 8
 
-// clang-format off
-int mask[MASK_N][MASK_X][MASK_Y] = {
-    {{ -1, -4, -6, -4, -1},
-     { -2, -8,-12, -8, -2},
-     {  0,  0,  0,  0,  0},
-     {  2,  8, 12,  8,  2},
-     {  1,  4,  6,  4,  1}},
-    {{ -1, -2,  0,  2,  1},
-     { -4, -8,  0,  8,  4},
-     { -6,-12,  0, 12,  6},
-     { -4, -8,  0,  8,  4},
-     { -1, -2,  0,  2,  1}}
-};
-// clang-format on
+
 
 int read_png(const char* filename, unsigned char** image, unsigned* height, unsigned* width,
     unsigned* channels) {
@@ -95,15 +83,33 @@ void write_png(const char* filename, png_bytep image, const unsigned height, con
     png_destroy_write_struct(&png_ptr, &info_ptr);
     fclose(fp);
 }
-
+__global__
 void sobel(unsigned char* s, unsigned char* t, unsigned height, unsigned width, unsigned channels) {
+    // clang-format off
+    int mask[MASK_N][MASK_X][MASK_Y] = {
+        {{ -1, -4, -6, -4, -1},
+        { -2, -8,-12, -8, -2},
+        {  0,  0,  0,  0,  0},
+        {  2,  8, 12,  8,  2},
+        {  1,  4,  6,  4,  1}},
+        {{ -1, -2,  0,  2,  1},
+        { -4, -8,  0,  8,  4},
+        { -6,-12,  0, 12,  6},
+        { -4, -8,  0,  8,  4},
+        { -1, -2,  0,  2,  1}}
+    };
+    // clang-format on
     int x, y, i, v, u;
     int R, G, B;
+    int index = threadIdx.x + blockIdx.x * blockDim.x;
+    int stride = blockDim.x * gridDim.x;
+
     double val[MASK_N * 3] = {0.0};
     int adjustX, adjustY, xBound, yBound;
-    for (y = 0; y < height; ++y) {
+    for (y = index; y < height; y += stride) {
         for (x = 0; x < width; ++x) {
             for (i = 0; i < MASK_N; ++i) {
+                
                 adjustX = (MASK_X % 2) ? 1 : 0;
                 adjustY = (MASK_Y % 2) ? 1 : 0;
                 xBound = MASK_X / 2;
@@ -126,7 +132,6 @@ void sobel(unsigned char* s, unsigned char* t, unsigned height, unsigned width, 
                     }
                 }
             }
-
             double totalR = 0.0;
             double totalG = 0.0;
             double totalB = 0.0;
@@ -146,6 +151,7 @@ void sobel(unsigned char* s, unsigned char* t, unsigned height, unsigned width, 
             t[channels * (width * y + x) + 1] = cG;
             t[channels * (width * y + x) + 0] = cB;
         }
+        // printf("%d\n", y);
     }
 }
 
@@ -154,18 +160,32 @@ int main(int argc, char** argv) {
 
     unsigned height, width, channels;
     unsigned char* src_img = NULL;
+    unsigned char* src_img_GPU = NULL;
+    size_t threads_per_block = 256;
+    size_t num_of_blocks = 32 * 20;
+    unsigned char* dst_img;
+    
+    
 
     read_png(argv[1], &src_img, &height, &width, &channels);
+
+    std::cout << height << " " << width << std::endl;
     assert(channels == 3);
 
-    unsigned char* dst_img =
-        (unsigned char*)malloc(height * width * channels * sizeof(unsigned char));
+    cudaMallocManaged(&dst_img, height * width * channels * sizeof(unsigned char));
+    cudaMallocManaged(&src_img_GPU, height * width * channels * sizeof(unsigned char));
+    cudaMemcpy(src_img_GPU, src_img, height * width * channels * sizeof(unsigned char), cudaMemcpyHostToDevice);
+ 
+    
+    sobel<<<num_of_blocks, threads_per_block>>>(src_img_GPU, dst_img, height, width, channels);
+    cudaDeviceSynchronize();
+ 
 
-    sobel(src_img, dst_img, height, width, channels);
     write_png(argv[2], dst_img, height, width, channels);
 
-    free(src_img);
-    free(dst_img);
+
+    cudaFree(src_img);
+    cudaFree(dst_img);
 
     return 0;
 }

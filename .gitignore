@@ -4,3 +4,6 @@ hw3
 hw3-diff
 libpngdiff.so
 runner.py
+*.png
+GPU_info
+add.cu
