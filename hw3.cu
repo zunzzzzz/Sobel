@@ -158,34 +158,41 @@ void sobel(unsigned char* s, unsigned char* t, unsigned height, unsigned width, 
 int main(int argc, char** argv) {
     assert(argc == 3);
 
+    int device_id;
     unsigned height, width, channels;
-    unsigned char* src_img = NULL;
+    unsigned char* src_img_HOST = NULL;
     unsigned char* src_img_GPU = NULL;
+    unsigned char* dst_img_HOST = NULL;
+    unsigned char* dst_img_GPU = NULL;
     size_t threads_per_block = 256;
-    size_t num_of_blocks = 20;
-    unsigned char* dst_img;
+    size_t num_of_blocks = 32 * 20;
     
     
+    cudaGetDevice(&device_id);
 
-    read_png(argv[1], &src_img, &height, &width, &channels);
+    read_png(argv[1], &src_img_HOST, &height, &width, &channels);
 
     // std::cout << height << " " << width << std::endl;
     assert(channels == 3);
 
-    cudaMallocManaged(&dst_img, height * width * channels * sizeof(unsigned char));
-    cudaMallocManaged(&src_img_GPU, height * width * channels * sizeof(unsigned char));
-    cudaMemcpy(src_img_GPU, src_img, height * width * channels * sizeof(unsigned char), cudaMemcpyHostToDevice);
+    size_t size = height * width * channels * sizeof(unsigned char);
+
+    cudaMalloc(&dst_img_GPU, size);
+    cudaMalloc(&src_img_GPU, size);
+    cudaMallocHost(&dst_img_HOST, size);
+
  
-    
-    sobel<<<num_of_blocks, threads_per_block>>>(src_img_GPU, dst_img, height, width, channels);
+    cudaMemcpy(src_img_GPU, src_img_HOST, size, cudaMemcpyHostToDevice);
+    sobel<<<num_of_blocks, threads_per_block>>>(src_img_GPU, dst_img_GPU, height, width, channels);
+    cudaMemcpy(dst_img_HOST, dst_img_GPU, size, cudaMemcpyDeviceToHost);
+
     cudaDeviceSynchronize();
- 
-
-    write_png(argv[2], dst_img, height, width, channels);
+    write_png(argv[2], dst_img_HOST, height, width, channels);
 
 
-    cudaFree(src_img);
-    cudaFree(dst_img);
-
+    cudaFree(src_img_GPU);
+    cudaFree(dst_img_GPU);
+    cudaFreeHost(src_img_HOST);
+    cudaFreeHost(dst_img_HOST);
     return 0;
 }
