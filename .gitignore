@@ -1,0 +1,6 @@
+samples/
+.ninja*
+hw3
+hw3-diff
+libpngdiff.so
+runner.py
