@@ -84,7 +84,7 @@ void write_png(const char* filename, png_bytep image, const unsigned height, con
     fclose(fp);
 }
 __global__
-void sobel(unsigned char* s, unsigned char* t, unsigned height, unsigned width, unsigned channels) {
+void sobel(unsigned char* s, unsigned char* t, unsigned height, unsigned width, unsigned channels, int start, int length) {
     // clang-format off
     int mask[MASK_N][MASK_X][MASK_Y] = {
         {{ -1, -4, -6, -4, -1},
@@ -107,7 +107,8 @@ void sobel(unsigned char* s, unsigned char* t, unsigned height, unsigned width, 
     double val[MASK_N * 3] = {0.0};
     int adjustX, adjustY, xBound, yBound;
 
-    for (int iter = index; iter < height * width; iter += stride) {
+    // for (int iter = index; iter < height * width; iter += stride) {
+    for (int iter = start + index; iter < start + length; iter += stride) {
         y = iter / width;
         x = iter % width;
         for (i = 0; i < MASK_N; ++i) {
@@ -152,6 +153,9 @@ void sobel(unsigned char* s, unsigned char* t, unsigned height, unsigned width, 
         t[channels * (width * y + x) + 2] = cR;
         t[channels * (width * y + x) + 1] = cG;
         t[channels * (width * y + x) + 0] = cB;
+        // if(start + iter < 40200 && start + iter > 40100) {
+        //     printf("%d\n", start + iter);
+        // }
     }
 }
 
@@ -179,26 +183,22 @@ int main(int argc, char** argv) {
     cudaMalloc(&dst_img_GPU, size);
     cudaMalloc(&src_img_GPU, size);
     cudaMallocHost(&dst_img_HOST, size);
-
-    // int num_of_segments = 10;
-    // height = 5, width = 11;
-    // int total_length = height * width;
     
-    // for(int i = 0; i < num_of_segments; i++) {
-    //     int start, part_length;
-    //     if(i == num_of_segments - 1) {
-    //         part_length = total_length - (total_length * i) / num_of_segments;
-    //     }
-    //     else {
-    //         part_length = (total_length * (i + 1)) / num_of_segments - (total_length * i) / num_of_segments;
-    //     }
-    //     start = (total_length * i) / num_of_segments;
-    //     std::cout << start << " " << part_length << std::endl;
-    // }
- 
-    cudaMemcpy(src_img_GPU, src_img_HOST, size, cudaMemcpyHostToDevice);
-    sobel<<<num_of_blocks, threads_per_block>>>(src_img_GPU, dst_img_GPU, height, width, channels);
-    cudaMemcpy(dst_img_HOST, dst_img_GPU, size, cudaMemcpyDeviceToHost);
+    int num_of_segments = 10;
+    int total_length = height * width;
+    
+    for(int i = 0; i < num_of_segments; i++) {
+        int start, part_length;
+        part_length = (total_length * (i + 1)) / num_of_segments - (total_length * i) / num_of_segments;
+        start = (total_length * i) / num_of_segments;
+        cudaStream_t stream;
+        cudaStreamCreate(&stream);
+        cudaMemcpyAsync(&src_img_GPU[start * channels], &src_img_HOST[start * channels], part_length * channels, cudaMemcpyHostToDevice, stream);
+        sobel<<<num_of_blocks, threads_per_block, 0, stream>>>(src_img_GPU, dst_img_GPU, height, width, channels, start, part_length);
+        cudaMemcpyAsync(&dst_img_HOST[start * channels], &dst_img_GPU[start * channels], part_length * channels, cudaMemcpyDeviceToHost, stream);
+        cudaStreamDestroy(stream);
+    }
+
 
     cudaDeviceSynchronize();
     write_png(argv[2], dst_img_HOST, height, width, channels);
