@@ -5,7 +5,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
-#include <ctime> // timer
+
 
 #define MASK_N 2
 #define MASK_X 5
@@ -107,7 +107,6 @@ void sobel(unsigned char* s, unsigned char* t, unsigned height, unsigned width, 
     double val[MASK_N * 3] = {0.0};
     int adjustX, adjustY, xBound, yBound;
 
-    // for (int iter = index; iter < height * width; iter += stride) {
     for (int iter = start + index; iter < start + length; iter += stride) {
         y = iter / width;
         x = iter % width;
@@ -153,9 +152,6 @@ void sobel(unsigned char* s, unsigned char* t, unsigned height, unsigned width, 
         t[channels * (width * y + x) + 2] = cR;
         t[channels * (width * y + x) + 1] = cG;
         t[channels * (width * y + x) + 0] = cB;
-        // if(start + iter < 40200 && start + iter > 40100) {
-        //     printf("%d\n", start + iter);
-        // }
     }
 }
 
@@ -175,18 +171,21 @@ int main(int argc, char** argv) {
     cudaGetDevice(&device_id);
 
     read_png(argv[1], &src_img_HOST, &height, &width, &channels);
-
     assert(channels == 3);
 
-    size_t size = height * width * channels * sizeof(unsigned char);
+    
 
+    // allocate memory 
+    size_t size = height * width * channels * sizeof(unsigned char);
     cudaMalloc(&dst_img_GPU, size);
     cudaMalloc(&src_img_GPU, size);
     cudaMallocHost(&dst_img_HOST, size);
     
-    int num_of_segments = 10;
+    
+    int num_of_segments = 2;
     int total_length = height * width;
     
+    // use MemcpyAsync to overlap Memcpy and kernel execution
     for(int i = 0; i < num_of_segments; i++) {
         int start, part_length;
         part_length = (total_length * (i + 1)) / num_of_segments - (total_length * i) / num_of_segments;
@@ -198,12 +197,11 @@ int main(int argc, char** argv) {
         cudaMemcpyAsync(&dst_img_HOST[start * channels], &dst_img_GPU[start * channels], part_length * channels, cudaMemcpyDeviceToHost, stream);
         cudaStreamDestroy(stream);
     }
-
-
     cudaDeviceSynchronize();
+
     write_png(argv[2], dst_img_HOST, height, width, channels);
 
-
+    // free memory
     cudaFree(src_img_GPU);
     cudaFree(dst_img_GPU);
     cudaFreeHost(src_img_HOST);
