@@ -172,7 +172,6 @@ int main(int argc, char** argv) {
 
     read_png(argv[1], &src_img_HOST, &height, &width, &channels);
 
-    // std::cout << height << " " << width << std::endl;
     assert(channels == 3);
 
     size_t size = height * width * channels * sizeof(unsigned char);
@@ -181,6 +180,21 @@ int main(int argc, char** argv) {
     cudaMalloc(&src_img_GPU, size);
     cudaMallocHost(&dst_img_HOST, size);
 
+    // int num_of_segments = 10;
+    // height = 5, width = 11;
+    // int total_length = height * width;
+    
+    // for(int i = 0; i < num_of_segments; i++) {
+    //     int start, part_length;
+    //     if(i == num_of_segments - 1) {
+    //         part_length = total_length - (total_length * i) / num_of_segments;
+    //     }
+    //     else {
+    //         part_length = (total_length * (i + 1)) / num_of_segments - (total_length * i) / num_of_segments;
+    //     }
+    //     start = (total_length * i) / num_of_segments;
+    //     std::cout << start << " " << part_length << std::endl;
+    // }
  
     cudaMemcpy(src_img_GPU, src_img_HOST, size, cudaMemcpyHostToDevice);
     sobel<<<num_of_blocks, threads_per_block>>>(src_img_GPU, dst_img_GPU, height, width, channels);
